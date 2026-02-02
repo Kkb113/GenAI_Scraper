@@ -4,6 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import re
+import json
 
 class GenAiScrapper:
 
@@ -73,6 +74,7 @@ class GenAiScrapper:
             self.df1 = pd.read_csv(path)
         except Exception as e:
             print(f"Error Reading file: {e}")
+            return
 
         if 'scraped_text' in self.df1.columns:
             for text in self.df1['scraped_text']:
@@ -89,13 +91,59 @@ class GenAiScrapper:
 
         self.df1.to_csv(path, index=False)
 
+    def model_evaluation(self, output_file = 'output.csv', output_folder = r'C:\Users\karth\Downloads\GenAI_Website_Content_Evaluation',df2: str = ''):
+        self.output_file = output_file
+        self.output_folder = output_folder
+        self.df2 = df2
+
+        path = os.path.join(self.output_folder, self.output_file)
+
+        try:
+            self.df2 = pd.read_csv(path)
+        except Exception as e:
+            print(f"Error Reading file: {e}")
+            return
         
+
+        if 'clean_text' in self.df2.columns:
+            evaluation_results = []
+
+            for txt in self.df2['clean_text']:
+                if txt == '' or txt == 'N/A':
+                    evaluation_results.append("N/A")
+                else:
+                    response = requests.post(
+                        url="https://openrouter.ai/api/v1/chat/completions",
+                        headers={ "Authorization": "Bearer NOT_GIVING_MY_API_KEY", "Content-Type": "application/json" },
+                        data=json.dumps({
+                        "model": "google/gemini-2.5-flash",
+                        "messages": [
+                            {"role": "system", "content": "Answer strictly Yes or No."},
+                            {"role": "user", "content": f"Based on the following text, is this company a core Microsoft competency?\n\n{txt}"}
+                        ]
+                    }))
+                    
+                    result = response.json()
+                    raw_answer = result["choices"][0]["message"]["content"]
+                    
+
+                    if raw_answer.strip().lower().startswith("yes"):
+                        evaluation_results.append("Yes")
+                    elif raw_answer.strip().lower().startswith("no"):
+                        evaluation_results.append("No")
+                    else:
+                        evaluation_results.append("N/A")
+
+            evaluation_text = evaluation_results
+            self.df2['LLM_Evaluation'] = evaluation_text
+            self.df2.to_csv(path, index=False)
 
 
     def main(self):
         self.import_csv_module()
         self.scrape_website()
         self.text_normalization()
+        self.model_evaluation()
 
 if __name__ == '__main__':
     run_scraper = GenAiScrapper()
